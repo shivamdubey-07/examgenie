@@ -1,11 +1,8 @@
 from openai import OpenAI
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from app.common.config import require_env
 
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=require_env("OPENAI_API_KEY"))
 
 def get_client():
     return client

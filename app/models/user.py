@@ -1,9 +1,10 @@
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
 
 from app.database.db import Base
+from app.common.enums import UserRole
 
 
 class User(Base):
@@ -13,6 +14,8 @@ class User(Base):
 
     email = Column(String, unique=True, index=True, nullable=False)
 
+    name = Column(String, nullable=True)
+
     username = Column(String, unique=True, index=True, nullable=False)
 
     hashed_password = Column(String, nullable=False)
@@ -21,7 +24,7 @@ class User(Base):
 
     is_verified = Column(Boolean, default=False)
 
-    role = Column(String, default="user")
+    role = Column(Enum(UserRole, name="user_role"), default=UserRole.student, nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
