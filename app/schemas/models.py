@@ -2,15 +2,15 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 from app.common.enums import AttemptStatus, DifficultyLevel, ExamStatus, UserRole
 
 class UserCreate(BaseModel):
     name: Optional[str] = None
-    email: str
+    email: EmailStr
     username: str
-    hashed_password: str
+    password: str
     role: UserRole = UserRole.student
 
 
@@ -233,3 +233,12 @@ class UserActivityLogRead(BaseModel):
     action: str
     log_metadata: Optional[Dict[str, Any]] = None
     created_at: Optional[datetime] = None
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserRead

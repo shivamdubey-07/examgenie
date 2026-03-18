@@ -25,6 +25,8 @@ from app.schemas.models import (
     QuestionStatisticRead,
     UserActivityLogCreate,
     UserActivityLogRead,
+    LoginRequest,
+    LoginResponse,
 )
 __all__ = [
     "UserCreate",
@@ -53,4 +55,6 @@ __all__ = [
     "QuestionStatisticRead",
     "UserActivityLogCreate",
     "UserActivityLogRead",
+    "LoginRequest",
+    "LoginResponse",
 ]
