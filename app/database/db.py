@@ -1,9 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from app.common.config import require_env
+from app.common.config import get_database_url
 
-DATABASE_URL = require_env("DATABASE_URL")
+DATABASE_URL = get_database_url()
 
 
 class Base(DeclarativeBase):

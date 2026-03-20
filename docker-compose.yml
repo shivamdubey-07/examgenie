@@ -9,9 +9,11 @@ services:
     volumes:
       - ./alembic:/app/alembic
     environment:
-      DATABASE_URL: ${DATABASE_URL}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       REDIS_URL: ${REDIS_URL}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
@@ -50,7 +52,11 @@ services:
     container_name: examgenie_worker
     restart: always
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       REDIS_URL: ${REDIS_URL}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
@@ -91,7 +97,7 @@ services:
     volumes:
       - examgenie_db:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -124,8 +130,6 @@ services:
     restart: always
     environment:
       - VITE_API_URL=http://localhost/api
-    ports:
-      - "5173:5173"
     expose:
       - "5173"
     volumes:
