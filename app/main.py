@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.routing import APIRouter
-from app.routes import auth
+from app.routes import auth, exam
 
 app = FastAPI(title="ExamGenie API")
 api_router = APIRouter(prefix="/api")
@@ -16,6 +16,7 @@ def health() -> dict[str, str]:
 
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(exam.router, prefix="/exam", tags=["auth"])
 
 
 app.include_router(api_router)

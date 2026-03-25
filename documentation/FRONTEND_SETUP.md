@@ -14,29 +14,43 @@ The ExamGenie frontend is a React application built with Vite. It provides a use
 
 ## Quick Start
 
-### Without Docker
+### Option 1: Development Without Docker (Fastest)
 
 ```bash
 cd examgenie_frontend
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
-
-# Will start on http://localhost:5173
 ```
 
-### With Docker
+Frontend starts on **http://localhost:5173**
+
+In another terminal, start the backend:
 
 ```bash
-cd examgenie  # Root directory
+cd examgenie
 docker-compose up -d
-
-# Frontend available at http://localhost (via nginx proxy)
-# Or direct: http://localhost:5173
 ```
+
+**Access:**
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+### Option 2: Development With Docker (Everything in one command)
+
+```bash
+cd examgenie
+docker-compose up -d
+```
+
+This starts:
+
+- Frontend dev server on http://localhost:5173 (with hot reload)
+- Backend API on http://localhost:8000
+- Nginx on http://localhost (proxies to backend)
+
+**Access:** http://localhost or http://localhost:5173
 
 ## Project Structure
 

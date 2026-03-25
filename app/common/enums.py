@@ -9,7 +9,10 @@ class UserRole(str, Enum):
 
 class ExamStatus(str, Enum):
     draft = "draft"
+    generating = "generating"
+    ready = "ready"
     published = "published"
+    failed = "failed"
 
 
 class AttemptStatus(str, Enum):

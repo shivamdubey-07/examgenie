@@ -1,155 +1,199 @@
-# Monitoring & Maintenance Guide
+# Monitoring & Maintenance
 
-## Overview
+Essential monitoring and maintenance tasks for ExamGenie.
 
-Proactive monitoring and regular maintenance keep ExamGenie running smoothly in production.
+## Health Check
 
-## Health Checks
+### API Health Endpoint
 
-### Basic Health Endpoint
+Simple health check (no auth required):
 
 ```bash
-# Check API health
 curl https://yourdomain.com/health
 
-# Response (200 OK):
-# {"status": "healthy"}
-
-# Should return 200 status code
-curl -I https://yourdomain.com/health
-# HTTP/2 200
+# Response:
+# {"status": "ok"}
 ```
 
-### Readiness Check
+Returns 200 if API is running.
+
+## Container Monitoring
+
+### Check Status
 
 ```bash
-# Checks if all dependencies are available
-curl https://yourdomain.com/readiness
+# View all containers
+docker-compose -f docker-compose.prod.yml ps
 
-# Response (200 OK):
-{
-  "status": "ready",
-  "database": "connected",
-  "redis": "connected",
-  "storage": "connected"
-}
+# View resource usage
+docker stats
 ```
 
-### Liveness Check
+### View Logs
 
 ```bash
-# For container orchestration (Kubernetes, Docker Swarm)
-curl https://yourdomain.com/live
+# All services
+docker-compose -f docker-compose.prod.yml logs -f
 
-# Response (200 OK):
-# {"status": "alive"}
+# Specific service
+docker-compose -f docker-compose.prod.yml logs -f api
+docker-compose -f docker-compose.prod.yml logs -f db
+docker-compose -f docker-compose.prod.yml logs -f worker
+
+# Last 100 lines with timestamps
+docker-compose -f docker-compose.prod.yml logs --tail=100 --timestamps api
 ```
 
-## Monitoring Setup
+## Database Maintenance
 
-### Prometheus Metrics
-
-Export metrics from FastAPI:
+### Check Database Health
 
 ```bash
-# Install prometheus client
-pip install prometheus-client
+# Connect to PostgreSQL
+docker-compose -f docker-compose.prod.yml exec db psql -U examgenie -d examgenie
 
-# Add to app/main.py
-from prometheus_client import Counter, Histogram, make_wsgi_app
-from prometheus_fastapi_instrumentator import Instrumentator
-
-Instrumentator().instrument(app).expose(app)
-
-# Metrics available at: http://localhost:8000/metrics
+# Useful queries:
+SELECT version();  # Database version
+SELECT * FROM pg_stat_activity;  # Current connections
 ```
 
-### Datadog Integration
-
-```python
-# In app/main.py
-from datadog import initialize, api
-
-options = {
-    'api_key': 'YOUR_API_KEY',
-    'app_key': 'YOUR_APP_KEY'
-}
-
-initialize(**options)
-
-# Send custom metrics
-from datadog import statsd
-
-statsd.gauge('exam.generation.time', elapsed_seconds, tags=['difficulty:intermediate'])
-statsd.increment('api.request.count', tags=[f'endpoint:{request.url.path}'])
-```
-
-### New Relic Integration
-
-```python
-# In requirements.txt
-newrelic
-
-# In app/main.py
-import newrelic.agent
-newrelic.agent.initialize('newrelic.ini')
-
-# Add to startup
-app.add_middleware(NewRelicMiddleware)
-```
-
-## Key Metrics to Monitor
-
-### API Performance
+### Check Slow Queries
 
 ```bash
-# Check response times
-docker-compose logs api | grep "duration"
+# Connect to PostgreSQL
+docker-compose -f docker-compose.prod.yml exec db psql -U examgenie -d examgenie
 
-# Average response time should be < 200ms
-# 95th percentile < 1 second
-```
-
-### Database Performance
-
-```bash
-# Connect and check queries
-docker-compose exec db psql -U examgenie -d examgenie
-
-# Find slow queries
-SELECT query, calls, mean_time
-FROM pg_stat_statements
-ORDER BY mean_time DESC
-LIMIT 10;
-
-# Check connections
-SELECT * FROM pg_stat_activity;
-
-# Check table sizes
-SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename))
+# View table sizes
+SELECT schemaname, tablename,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
 FROM pg_tables
 WHERE schemaname != 'pg_catalog'
 ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+# Kill long-running queries
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE pid <> pg_backend_pid() AND state = 'active';
 ```
 
-### Redis Performance
+### Backup Database
 
 ```bash
-# Connect to Redis
+# Backup to file
+docker-compose -f docker-compose.prod.yml exec db pg_dump -U examgenie examgenie > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Restore from backup
+docker-compose -f docker-compose.prod.yml exec -T db psql -U examgenie examgenie < backup.sql
+```
+
+## Storage (MinIO) Maintenance
+
+### Check MinIO Health
+
+```bash
+# MinIO health is checked via Docker logs
+docker-compose -f docker-compose.prod.yml logs minio
+
+# If needed, access MinIO web UI: http://yourdomain:9001
+# Default credentials: minioadmin / minioadmin
+```
+
+### Check Storage Usage
+
+```bash
+# Connect to MinIO and check bucket size
+# Via web UI: http://yourdomain:9001 > Settings > Usage
+```
+
+## Cache (Redis) Maintenance
+
+### Check Redis Status
+
+```bash
+# Connect to Redis CLI
 docker-compose exec redis redis-cli
 
 # Check memory usage
 INFO memory
 
-# Check commands (real-time)
-MONITOR
+# View key count
+DBSIZE
 
-# Check slow commands
+# Check for slow commands (optional)
 SLOWLOG GET 10
-
-# Set slowlog threshold
-CONFIG SET slowlog-log-microseconds 10000
 ```
+
+### Clear Cache
+
+```bash
+# Connect to Redis
+docker-compose exec redis redis-cli
+
+# Clear all cache
+FLUSHDB
+
+# Or specific pattern
+KEYS "exam:*" | xargs redis-cli DEL
+```
+
+## Regular Maintenance Tasks
+
+### Daily
+
+- Check logs for errors: `docker-compose logs | grep ERROR`
+- Verify API is healthy: `curl https://yourdomain.com/health`
+
+### Weekly
+
+- Backup database: `docker-compose exec db pg_dump -U examgenie examgenie > backup_weekly.sql`
+- Check disk space: `df -h`
+- Review error logs: `docker-compose logs api | grep -i error`
+
+### Monthly
+
+- Monitor database growth: `SELECT pg_database_size('examgenie');`
+- Check certificate expiration (Let's Encrypt): `sudo certbot certificates`
+- Review and rotate logs if needed
+
+## Common Issues
+
+### High Memory Usage
+
+```bash
+# Check which service is using memory
+docker stats
+
+# Restart service if necessary
+docker-compose -f docker-compose.prod.yml restart api
+```
+
+### Database Connection Issues
+
+```bash
+# Check active connections
+docker-compose exec db psql -U examgenie -d examgenie -c "SELECT count(*) FROM pg_stat_activity;"
+
+# Kill idle connections if needed
+docker-compose exec db psql -U examgenie -d examgenie -c \
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle' AND query_start < now() - interval '1 hour';"
+```
+
+### Disk Space Running Low
+
+```bash
+# Check disk usage
+du -sh /var/lib/docker/
+
+# Clean unused Docker images/containers
+docker system prune -a
+
+# Check database size
+docker-compose exec db psql -U examgenie -d examgenie -c "SELECT pg_size_pretty(pg_database_size('examgenie'));"
+```
+
+CONFIG SET slowlog-log-microseconds 10000
+
+````
 
 ### Celery Tasks
 
@@ -166,7 +210,7 @@ docker-compose exec worker celery -A app.worker.celery_app events
 # Check task queue
 docker-compose exec redis redis-cli LLEN celery
 docker-compose exec redis redis-cli LRANGE celery 0 -1
-```
+````
 
 ## Logging Strategy
 

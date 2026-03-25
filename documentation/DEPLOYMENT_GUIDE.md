@@ -1,97 +1,76 @@
 # Deployment Guide
 
+Quick reference for deploying ExamGenie to production.
+
 ## Pre-Deployment Checklist
 
-- [ ] All tests passing
-- [ ] Code reviewed
-- [ ] Database migrations tested
-- [ ] Environment variables configured
-- [ ] SSL certificates obtained
+- [ ] All environment variables configured
+- [ ] Database setup verified
+- [ ] SSL certificate obtained (Let's Encrypt recommended)
 - [ ] Backups created
-- [ ] Monitoring configured
-- [ ] Team notified
+- [ ] Team notified of downtime (if any)
 
-## Development to Production
+## 1. Prepare Environment
 
-### 1. Build Docker Image
-
-```bash
-cd examgenie
-
-# Build production image
-docker build -t examgenie:v1.0 .
-
-# Test image locally
-docker run -p 8000:8000 examgenie:v1.0
-
-# Tag for registry
-docker tag examgenie:v1.0 registry.example.com/examgenie:v1.0
-
-# Push to registry
-docker push registry.example.com/examgenie:v1.0
-```
-
-### 2. Prepare Environment
+Create `.env.prod` with production values:
 
 ```bash
-# On production server
-mkdir -p /opt/examgenie
-cd /opt/examgenie
-
-# Copy docker-compose files
-scp docker-compose.prod.yml user@server:/opt/examgenie/
-scp nginx.prod.conf user@server:/opt/examgenie/nginx.conf
-
-# Create environment file
-cat > .env.prod << EOF
 # Database
 POSTGRES_USER=examgenie
-POSTGRES_PASSWORD=STRONG_PASSWORD_HERE
+POSTGRES_PASSWORD=<strong_random_password>
 POSTGRES_DB=examgenie
-DB_HOST=db
-DB_PORT=5432
 
 # Redis
-REDIS_PASSWORD=REDIS_PASSWORD_HERE
+REDIS_PASSWORD=<strong_random_password>
 
 # MinIO
 MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=MINIO_PASSWORD_HERE
-S3_BUCKET=examgenie
+MINIO_ROOT_PASSWORD=<strong_random_password>
 
-# App
+# Application
 DEBUG=false
 ENVIRONMENT=production
-SECRET_KEY=GENERATE_RANDOM_32_CHAR_STRING
+SECRET_KEY=<generate_with_python_secrets>
 CORS_ORIGINS=["https://yourdomain.com"]
 
-# OpenAI
-OPENAI_API_KEY=sk-...
+# OpenAI (required for AI features)
+OPENAI_API_KEY=sk-...your_key...
 
 LOG_LEVEL=WARNING
-EOF
-
-chmod 600 .env.prod
 ```
 
-### 3. SSL Certificate Setup
+## 2. Build and Deploy
+
+```bash
+# Build production Docker image
+docker build -t examgenie:latest .
+
+# Start services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Run migrations (first time only)
+docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
+
+# Verify services
+docker-compose -f docker-compose.prod.yml ps
+```
+
+## 3. SSL/TLS Setup
+
+### Using Let's Encrypt with Certbot
 
 ```bash
 # Install Certbot
 sudo apt-get install certbot python3-certbot-nginx
 
-# Generate certificate
+# Get certificate
 sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com
 
-# Creates: /etc/letsencrypt/live/yourdomain.com/
-
-# Verify certificate
+# Verify
 sudo certbot certificates
 ```
 
-### 4. Configure Nginx
-
-Update `nginx.prod.conf`:
+### Update nginx.prod.conf
 
 ```nginx
 server {
@@ -112,94 +91,84 @@ server {
 }
 ```
 
-### 5. Start Services
+## 4. Database Migrations
 
-```bash
-cd /opt/examgenie
-
-# Pull latest image
-docker pull registry.example.com/examgenie:v1.0
-
-# Start with production compose
-docker-compose -f docker-compose.prod.yml up -d
-
-# Verify all services
-docker-compose -f docker-compose.prod.yml ps
-
-# Check health
-curl https://yourdomain.com/health
-```
-
-### 6. Database Setup (First Time Only)
+### First Deployment
 
 ```bash
 # Create database and run migrations
 docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
 
-# Verify database
+# Verify
 docker-compose -f docker-compose.prod.yml exec db psql -U examgenie -d examgenie -c "SELECT 1;"
 ```
 
-## Zero-Downtime Deployment
-
-### Strategy: Rolling Update
-
-```yaml
-# docker-compose.prod.yml
-services:
-  api:
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1 # Update one at a time
-        delay: 30s # Wait 30 seconds between updates
-        failure_action: rollback # Rollback if fails
-```
-
-### Deployment Steps
+### Subsequent Deployments
 
 ```bash
-# 1. Build new image
-docker build -t examgenie:v1.1 .
-docker push registry.example.com/examgenie:v1.1
+# Always backup first
+docker-compose -f docker-compose.prod.yml exec db pg_dump -U examgenie examgenie > backup_before_deploy.sql
 
-# 2. Update compose file with new image tag
-sed -i 's|examgenie:v1.0|examgenie:v1.1|' docker-compose.prod.yml
+# Run migrations
+docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
+```
 
-# 3. Apply update (rolling)
-docker-compose -f docker-compose.prod.yml up -d
+## 5. Monitoring
 
-# New image pulled and services updated one at a time
-# Old instances still serve traffic during update
+Check health:
 
-# 4. Verify
-docker-compose -f docker-compose.prod.yml ps
+```bash
+# API health
 curl https://yourdomain.com/health
 
-# 5. If something fails, Docker rolls back automatically
+# Container status
+docker-compose -f docker-compose.prod.yml ps
+
+# Logs
+docker-compose -f docker-compose.prod.yml logs -f api
 ```
 
-## Database Migrations in Production
+## Troubleshooting
 
-### Safe Migration Procedure
+### Services won't start
 
 ```bash
-# 1. Backup current database
-docker-compose -f docker-compose.prod.yml exec db pg_dump -U examgenie examgenie > backup_pre_deploy.sql
+# Check logs
+docker-compose -f docker-compose.prod.yml logs
 
-# 2. Test migration on staging environment first
-docker-compose -f docker-compose.staging.yml exec api alembic upgrade head
-
-# 3. After testing, run on production
-docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
-
-# 4. Verify migration succeeded
-docker-compose -f docker-compose.prod.yml exec db psql -U examgenie -d examgenie -c "SELECT * FROM alembic_version;"
-
-# 5. If error, rollback
-docker-compose -f docker-compose.prod.yml exec api alembic downgrade -1
-docker-compose -f docker-compose.prod.yml exec db psql -U examgenie -d examgenie < backup_pre_deploy.sql
+# Rebuild
+docker-compose -f docker-compose.prod.yml down -v
+docker build --no-cache -t examgenie:latest .
+docker-compose -f docker-compose.prod.yml up -d
 ```
+
+### Database migration fails
+
+```bash
+# View current migration state
+docker-compose -f docker-compose.prod.yml exec api alembic current
+
+# Revert one migration (if safe)
+docker-compose -f docker-compose.prod.yml exec api alembic downgrade -1
+
+# Try again
+docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
+```
+
+### Out of memory
+
+```bash
+# Check resource usage
+docker stats
+
+# Edit docker-compose.prod.yml and reduce resource limits
+# Then restart
+docker-compose -f docker-compose.prod.yml restart
+```
+
+docker-compose -f docker-compose.prod.yml exec db psql -U examgenie -d examgenie < backup_pre_deploy.sql
+
+````
 
 ## Monitoring & Logging
 
@@ -212,7 +181,7 @@ docker-compose -f docker-compose.prod.yml logs -f api
 
 # View recent logs
 docker-compose -f docker-compose.prod.yml logs --tail=100 api
-```
+````
 
 ## SSL Auto-Renewal
 

@@ -1,40 +1,82 @@
 from .client import get_client
-from .prompts import build_question_prompt 
+from .prompts import build_question_prompt
+import json
+import logging
 
-import random
-# def generate_questions(subject, topic , difficulty, num_questions):
+logger = logging.getLogger(__name__)
 
-#     client = get_client()
 
-#     prompt= build_question_prompt(subject, topic, difficulty, num_questions)
-#     response = client.chat.completions.create(
-#         model="gpt-4o-mini",
-#         messages=[
-#             {"role": "user", "content": prompt}
-#         ]
-#     )
+def generate_questions(subject: str, topic: str, difficulty: str, num_questions: int) -> dict:
+    """
+    Generate multiple choice questions using OpenAI API.
+    
+    :param subject: Exam subject
+    :param topic: Exam topic
+    :param difficulty: Difficulty level (easy, medium, hard)
+    :param num_questions: Number of questions to generate
+    :return: Dict with 'questions' list
+    :raises: ValueError if response parsing fails
+    """
+    client = get_client()
+    prompt = build_question_prompt(subject, topic, difficulty, num_questions)
 
-#     return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
 
-def generate_questions(subject, topic, difficulty, num_questions):
+        response_text = response.choices[0].message.content
+        
+        # Parse JSON response
+        questions_data = json.loads(response_text)
+        
+        # Validate structure
+        if "questions" not in questions_data:
+            raise ValueError("Response missing 'questions' key")
+        
+        if not isinstance(questions_data["questions"], list):
+            raise ValueError("'questions' must be a list")
+        
+        if len(questions_data["questions"]) == 0:
+            raise ValueError("No questions generated")
+        
+        # Validate each question structure
+        for idx, q in enumerate(questions_data["questions"]):
+            _validate_question_structure(q, idx)
+        
+        logger.info(f"Successfully generated {len(questions_data['questions'])} questions")
+        return questions_data
 
-    questions = []
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse OpenAI response as JSON: {e}")
+        raise ValueError(f"Invalid JSON response from AI: {e}")
+    except Exception as e:
+        logger.error(f"Error generating questions: {e}")
+        raise
 
-    for i in range(num_questions):
-        correct = random.choice(["A", "B", "C", "D"])
 
-        question = {
-            "question": f"{subject} question {i+1} on {topic} ({difficulty})",
-            "options": {
-                "A": f"Option A for question {i+1}",
-                "B": f"Option B for question {i+1}",
-                "C": f"Option C for question {i+1}",
-                "D": f"Option D for question {i+1}"
-            },
-            "correct_answer": correct,
-            "explanation": f"This is a sample explanation for question {i+1}"
-        }
-
-        questions.append(question)
-
-    return {"questions": questions}
+def _validate_question_structure(question: dict, index: int) -> None:
+    """Validate a single question has required fields."""
+    required_fields = ["question", "options", "correct_answer", "explanation"]
+    for field in required_fields:
+        if field not in question:
+            raise ValueError(f"Question {index} missing required field: {field}")
+    
+    # Validate options is a dict with A, B, C, D keys
+    options = question["options"]
+    if not isinstance(options, dict):
+        raise ValueError(f"Question {index}: options must be a dict")
+    
+    required_option_keys = {"A", "B", "C", "D"}
+    if not required_option_keys.issubset(set(options.keys())):
+        raise ValueError(f"Question {index}: must have options A, B, C, D")
+    
+    # Validate correct_answer is one of A, B, C, D
+    correct = question["correct_answer"]
+    if correct not in required_option_keys:
+        raise ValueError(f"Question {index}: correct_answer must be one of A, B, C, D, got {correct}")

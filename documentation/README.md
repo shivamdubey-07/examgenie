@@ -1,107 +1,157 @@
 # ExamGenie Documentation
 
-Welcome to the ExamGenie project documentation. This folder contains comprehensive guides for development, deployment, and maintenance.
+Complete guides for developing and deploying ExamGenie.
 
-## Quick Navigation
+## Quick Start
 
-### Getting Started
+New to the project?
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - System overview and component architecture
-- [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) - Quick start for local development
+1. **[DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md)** - Get running in 5 minutes
+2. **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Understand the system design
 
-### Setup & Configuration
+## Development
 
-- [DOCKER_SETUP.md](./DOCKER_SETUP.md) - Docker and docker-compose configuration
-- [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) - Environment variables and secrets
-- [DATABASE_MIGRATIONS.md](./DATABASE_MIGRATIONS.md) - Database schema and Alembic migrations
+### Frontend Development
 
-### Development
+- [FRONTEND_SETUP.md](./FRONTEND_SETUP.md) - React + Vite setup and development workflow
+- **Note:** Frontend also lives in `examgenie_frontend/` with its own README
 
-- [API_INTEGRATION.md](./API_INTEGRATION.md) - Backend API structure and endpoints
-- [FRONTEND_SETUP.md](./FRONTEND_SETUP.md) - Frontend development and build process
+### Backend Development
 
-### Deployment & Operations
+- [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) - Local setup and debugging
+- [API_INTEGRATION.md](./API_INTEGRATION.md) - API endpoints and authentication
+- [DATABASE_MIGRATIONS.md](./DATABASE_MIGRATIONS.md) - Managing database schema changes
 
-- [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - Production deployment procedures
-- [MONITORING_MAINTENANCE.md](./MONITORING_MAINTENANCE.md) - Monitoring, logging, and maintenance
+## Deployment & Operations
+
+### Getting Ready for Production
+
+1. [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) - Configure environment variables
+2. [DOCKER_SETUP.md](./DOCKER_SETUP.md) - Docker and docker-compose reference
+3. [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - Deploy to production
+
+### Running in Production
+
+- [MONITORING_MAINTENANCE.md](./MONITORING_MAINTENANCE.md) - Health checks, logs, and routine maintenance
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Common issues and solutions
+
+## Architecture Overview
+
+**Frontend:** React 19 + Vite + Tailwind CSS
+
+**Backend:** FastAPI + SQLAlchemy + PostgreSQL
+
+**Infrastructure:** Docker Compose + Nginx + Redis + MinIO
+
+**AI:** OpenAI integration for exam generation
+
+**Async:** Celery for background tasks
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system design.
+
+## Technologies
+
+| Component         | Tech                                       |
+| ----------------- | ------------------------------------------ |
+| **Frontend**      | React 19, Vite, React Router, Tailwind CSS |
+| **Backend**       | FastAPI, SQLAlchemy 2.0, Pydantic          |
+| **Database**      | PostgreSQL 16                              |
+| **Cache**         | Redis 7                                    |
+| **Storage**       | MinIO (S3-compatible)                      |
+| **Queue**         | Celery + Redis                             |
+| **Reverse Proxy** | Nginx                                      |
+| **Containers**    | Docker, Docker Compose                     |
+| **AI**            | OpenAI API                                 |
 
 ## Project Structure
 
 ```
-examgenie/              (Backend - FastAPI)
-├── app/
-│   ├── main.py        (FastAPI application)
-│   ├── auth/          (Authentication & JWT)
-│   ├── models/        (SQLAlchemy models)
-│   ├── routes/        (API endpoints)
-│   ├── schemas/       (Pydantic schemas)
-│   ├── services/      (Business logic)
-│   │   ├── ai/        (OpenAI integration)
-│   │   ├── cache/     (Redis caching)
-│   │   ├── pdf/       (PDF generation)
-│   │   └── storage/   (S3/MinIO storage)
-│   └── worker/        (Celery tasks)
-├── alembic/           (Database migrations)
-├── docker-compose.yml (Development)
-├── docker-compose.prod.yml (Production)
-└── Dockerfile
-
-examgenie_frontend/    (Frontend - React + Vite)
-├── src/
-│   ├── pages/         (React pages)
-│   ├── services/      (API clients)
-│   └── assets/        (Static assets)
-├── Dockerfile         (Dev server)
-└── package.json
+Exam Genie/
+├── examgenie/                  (Backend - FastAPI)
+│   ├── app/
+│   │   ├── main.py            (FastAPI app entry point)
+│   │   ├── auth/              (JWT authentication)
+│   │   ├── models/            (SQLAlchemy ORM models)
+│   │   ├── routes/            (API endpoints)
+│   │   ├── schemas/           (Pydantic request/response)
+│   │   ├── services/          (Business logic)
+│   │   │   ├── ai/            (OpenAI integration)
+│   │   │   ├── auth/          (Auth service)
+│   │   │   ├── cache/         (Redis caching)
+│   │   │   ├── pdf/           (PDF generation)
+│   │   │   └── storage/       (S3/MinIO)
+│   │   ├── database/          (SQLAlchemy session)
+│   │   ├── worker/            (Celery tasks)
+│   │   └── common/            (Enums, config)
+│   ├── alembic/               (Database migrations)
+│   ├── docker-compose.yml     (Dev environment)
+│   ├── docker-compose.prod.yml (Prod environment)
+│   ├── Dockerfile             (API container)
+│   ├── nginx.conf             (Dev reverse proxy)
+│   └── nginx.prod.conf        (Prod reverse proxy)
+│
+├── examgenie_frontend/         (Frontend - React + Vite)
+│   ├── src/
+│   │   ├── pages/             (Page components)
+│   │   ├── components/        (Reusable components)
+│   │   ├── contexts/          (React Context)
+│   │   ├── hooks/             (Custom hooks)
+│   │   ├── services/          (API client)
+│   │   └── assets/            (Images, fonts)
+│   ├── Dockerfile             (Frontend dev server)
+│   ├── vite.config.js         (Vite configuration)
+│   └── package.json           (Dependencies)
+│
+└── documentation/             (These guides)
 ```
 
-## Technology Stack
+## Common Tasks
 
-### Backend
-
-- **Framework:** FastAPI (Python 3.12)
-- **Database:** PostgreSQL 16
-- **Cache:** Redis 7
-- **Storage:** MinIO (S3-compatible)
-- **Task Queue:** Celery
-- **ORM:** SQLAlchemy 2.0
-
-### Frontend
-
-- **Framework:** React 19
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS
-- **HTTP Client:** Axios
-- **Router:** React Router v7
-
-### DevOps
-
-- **Containerization:** Docker
-- **Orchestration:** Docker Compose
-- **Reverse Proxy:** Nginx
-- **SSL/TLS:** Let's Encrypt (production)
-
-## Key Features
-
-- ✅ AI-powered exam generation (OpenAI integration)
-- ✅ Exam attempt tracking with analytics
-- ✅ PDF export functionality
-- ✅ S3/MinIO file storage
-- ✅ JWT authentication
-- ✅ Async task processing (Celery)
-- ✅ Redis caching layer
-- ✅ Database migrations (Alembic)
-
-## Development Workflow
-
-### 1. Setup Development Environment
+### Start Development
 
 ```bash
 cd examgenie
 docker-compose up -d
-# Access: http://localhost
+
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
 ```
+
+### Create Database Migration
+
+```bash
+docker-compose exec api alembic revision --autogenerate -m "Description of change"
+docker-compose exec api alembic upgrade head
+```
+
+### Review API Endpoints
+
+Visit [http://localhost:8000/docs](http://localhost:8000/docs) when running locally.
+
+Or see [API_INTEGRATION.md](./API_INTEGRATION.md) for detailed endpoint documentation.
+
+### Deploy to Production
+
+Follow [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for step-by-step instructions.
+
+### Troubleshoot Issues
+
+Start with [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for common problems and solutions.
+
+## Support
+
+For issues or questions:
+
+1. Check [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) first
+2. Review relevant doc in this folder
+3. Check application logs: `docker-compose logs -f`
+   cd examgenie
+   docker-compose up -d
+
+# Access: http://localhost
+
+````
 
 ### 2. Make Changes
 
@@ -113,7 +163,7 @@ docker-compose up -d
 ```bash
 docker exec examgenie_api alembic revision --autogenerate -m "Description"
 docker exec examgenie_api alembic upgrade head
-```
+````
 
 ### 4. Test & Deploy
 

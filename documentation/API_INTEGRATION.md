@@ -2,22 +2,43 @@
 
 ## Backend API Overview
 
-The ExamGenie backend is built with FastAPI, providing RESTful endpoints for exam management, student attempts, and user authentication.
+The ExamGenie backend is built with FastAPI, providing RESTful endpoints for exam generation, user authentication, and result tracking.
 
 ## Base URL
 
-- **Development**: `http://localhost:8000`
-- **Production**: `https://yourdomain.com`
+- **Development**: `http://localhost:8000/api`
+- **Production**: `https://yourdomain.com/api`
+
+## API Response Format
+
+All responses are JSON. Successful requests return status `200-202` with data:
+
+```json
+{
+  "id": "uuid",
+  "status": "success",
+  "data": {
+    /* endpoint-specific */
+  }
+}
+```
+
+Errors return appropriate status codes with detail:
+
+```json
+{
+  "detail": "Error description"
+}
+```
 
 ## Authentication
 
 ### JWT Token Flow
 
 ```
-1. POST /auth/register         → Register user
-2. POST /auth/login            → Get JWT token
-3. Authorization header        → Include token in requests
-4. POST /auth/refresh          → Get new token when expired
+1. POST /auth/register         → Register user, get token
+2. POST /auth/login            → Login user, get token
+3. Include token in requests   → Authorization header
 ```
 
 ### Using JWT Token
@@ -32,123 +53,185 @@ Example:
 
 ```bash
 curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." \
-  http://localhost:8000/api/exams
+  http://localhost:8000/api/exam/generate
 ```
 
 ## API Endpoints
 
 ### Authentication
 
-```
-POST   /auth/register      - Register new user
-POST   /auth/login         - Login user
-POST   /auth/logout        - Logout user
-POST   /auth/refresh       - Refresh token
-```
+#### POST /auth/register
 
-**POST /auth/register**
+Register a new user account.
+
+**Request:**
 
 ```json
-Request:
 {
   "email": "user@example.com",
-  "password": "secure_password",
+  "password": "securepassword",
   "full_name": "John Doe"
 }
+```
 
-Response (201):
+**Response (201):**
+
+```json
 {
-  "id": 1,
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "user@example.com",
   "full_name": "John Doe",
-  "created_at": "2024-03-18T10:30:00"
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer"
 }
 ```
 
-**POST /auth/login**
+#### POST /auth/login
+
+Login and get JWT access token.
+
+**Request:**
 
 ```json
-Request:
 {
   "email": "user@example.com",
-  "password": "secure_password"
+  "password": "securepassword"
 }
+```
 
-Response (200):
+**Response (200):**
+
+```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
   "token_type": "bearer",
-  "expires_in": 3600
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "user@example.com",
+    "full_name": "John Doe"
+  }
 }
 ```
 
-### Users
+### Exam Endpoints
 
-```
-GET    /users/{id}         - Get user profile
-PUT    /users/{id}         - Update user profile
-GET    /users/me           - Get current user
-DELETE /users/{id}         - Delete user
-```
+#### POST /exam/generate
 
-### Exams
+Create a new exam and queue it for AI generation. Returns immediately with status `generating`.
 
-```
-GET    /exams              - List all exams
-POST   /exams              - Create exam
-GET    /exams/{id}         - Get exam details
-PUT    /exams/{id}         - Update exam
-DELETE /exams/{id}         - Delete exam
-POST   /exams/{id}/generate - Generate with AI
-```
-
-**POST /exams/generate**
+**Request:**
 
 ```json
-Request:
 {
-  "topic": "Python Programming",
-  "num_questions": 10,
+  "title": "Python Basics",
+  "subject": "Programming",
+  "topic": "Python",
   "difficulty": "intermediate",
-  "question_type": "multiple_choice"
-}
-
-Response (202 - Accepted):
-{
-  "id": 1,
-  "status": "pending",
-  "topic": "Python Programming",
   "num_questions": 10
 }
+```
 
-# Poll for completion
-GET /exams/1
-Response (200 - when ready):
+**Response (202 - Accepted):**
+
+```json
 {
-  "id": 1,
-  "status": "ready",
-  "questions": [...],
-  "created_at": "2024-03-18T10:30:00"
+  "exam_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "generating",
+  "message": "Exam generation queued. Check status endpoint for updates."
 }
 ```
 
-### Questions
+**Frontend should poll** for completion. See [Polling for Exam Status](#polling-for-exam-status) below.
 
-```
-GET    /exams/{id}/questions           - Get questions for exam
-GET    /questions/{id}                 - Get question details
-GET    /questions/{id}/explanation     - Get AI explanation
+### Health Check
+
+#### GET /health
+
+Simple health check endpoint (no auth required).
+
+**Response (200):**
+
+```json
+{
+  "status": "ok"
+}
 ```
 
-### Exam Attempts
+## Common Patterns
 
+### Polling for Exam Status
+
+After generating an exam, poll the status endpoint:
+
+```javascript
+// Frontend - poll until ready
+const pollExamStatus = async (examId) => {
+  const response = await apiClient.get(`/exam/status/${examId}`);
+
+  if (response.data.status === "ready") {
+    // Exam is ready - now get questions
+    return response.data;
+  } else if (response.data.status === "generating") {
+    // Wait and poll again
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return pollExamStatus(examId);
+  } else if (response.data.status === "failed") {
+    throw new Error(response.data.failure_reason);
+  }
+};
 ```
-GET    /attempts                       - List user's attempts
-POST   /attempts                       - Start new attempt
-GET    /attempts/{id}                  - Get attempt details
-POST   /attempts/{id}/answer           - Submit single answer
-POST   /attempts/{id}/submit           - Complete attempt
+
+### Error Handling
+
+```javascript
+import axios from "axios";
+
+const apiClient = axios.create({
+  baseURL: "http://localhost:8000/api",
+});
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Unauthorized - redirect to login
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    } else if (error.response?.status === 422) {
+      // Validation error
+      console.error("Validation error:", error.response.data.detail);
+    }
+    return Promise.reject(error);
+  },
+);
+
+export default apiClient;
 ```
+
+### Authorization Headers
+
+```javascript
+// Automatically add token to all requests
+const token = localStorage.getItem("token");
+
+if (token) {
+  apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+}
+```
+
+## Status Codes
+
+- **200 OK** - Successful request
+- **201 Created** - Resource created successfully
+- **202 Accepted** - Request queued (e.g., exam generation)
+- **400 Bad Request** - Invalid input
+- **401 Unauthorized** - Missing or invalid token
+- **403 Forbidden** - Authenticated but not authorized
+- **404 Not Found** - Resource doesn't exist
+- **422 Unprocessable Entity** - Validation error
+- **500 Internal Server Error** - Server error
+
+````
 
 **POST /attempts**
 
@@ -166,7 +249,7 @@ Response (201):
   "status": "in_progress",
   "started_at": "2024-03-18T10:30:00"
 }
-```
+````
 
 **POST /attempts/{id}/answer**
 

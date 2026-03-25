@@ -242,3 +242,48 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
+
+
+class ExamGenerateRequest(BaseModel):
+    """Request to generate a new exam with AI."""
+    title: str
+    subject: str
+    topic: str
+    difficulty: DifficultyLevel
+    num_questions: int
+
+
+class ExamGenerateResponse(BaseModel):
+    """Response after exam generation request is queued."""
+    exam_id: UUID
+    status: ExamStatus
+    message: str = "Exam generation queued"
+
+
+class ExamStatusResponse(BaseModel):
+    """Response with current exam status."""
+    model_config = ConfigDict(from_attributes=True)
+
+    exam_id: UUID
+    status: ExamStatus
+    title: str
+    question_count: int = 0
+    failure_reason: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ExamDetailResponse(BaseModel):
+    """Full exam details with all questions."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    title: str
+    subject: str
+    topic: str
+    difficulty: DifficultyLevel
+    status: ExamStatus
+    created_by: UUID
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    questions: List[Dict[str, Any]] = []
