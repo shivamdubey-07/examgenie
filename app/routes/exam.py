@@ -86,6 +86,30 @@ def generate_exam(
         )
 
 
+@router.get("/my-exams")
+def get_my_exams(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = UUID(current_user["sub"])
+    exams = db.query(Exam).filter(Exam.created_by == user_id).order_by(Exam.created_at.desc()).all()
+    result = []
+    for exam in exams:
+        result.append({
+            "id": exam.id,
+            "name": exam.title,
+            "subject": exam.subject,
+            "topic": exam.topic,
+            "difficulty": exam.difficulty.value.capitalize(),
+            "status": exam.status.value,
+            "created_at": exam.created_at,
+            "attempted": len(exam.attempts) > 0,
+            "score": exam.attempts[-1].score if exam.attempts else None,
+            "questions": exam.exam_questions,
+        })
+    return result
+
+
 @router.get("/{exam_id}/status", response_model=ExamStatusResponse)
 def get_exam_status(
     exam_id: UUID,

@@ -2,9 +2,11 @@ from jose import jwt, JWTError
 from fastapi import HTTPException, status
 from datetime import datetime, timedelta
 
-SECRET_KEY = "supersecret"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+from app.common.config import require_env
+
+SECRET_KEY = require_env("JWT_SECRET_KEY")
+ALGORITHM = require_env("JWT_ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(require_env("TOKEN_EXPIRE_MINUTES"))
 
 
 def create_access_token(data: dict):

@@ -3,6 +3,7 @@ import time
 from uuid import UUID
 from typing import Optional
 
+from openai import AuthenticationError as OpenAIAuthError
 from sqlalchemy.orm import Session
 
 from app.worker.celery_app import celery_app
@@ -96,6 +97,13 @@ def generate_exam_task(
             "question_count": created_count,
             "generation_time": time.time() - start_time,
         }
+    
+    except OpenAIAuthError as e:
+        logger.error(f"OpenAI auth error — check your API key. Will not retry.")
+        if db:
+            exam_service = ExamService(db)
+            exam_service.update_exam_status(UUID(exam_id), ExamStatus.failed, failure_reason="Invalid OpenAI API key")
+        return {"exam_id": exam_id, "status": "failed", "error": str(e)}
 
     except Exception as e:
         logger.error(f"Error generating exam {exam_id}: {str(e)}", exc_info=True)
