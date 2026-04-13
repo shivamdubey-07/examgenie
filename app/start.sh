@@ -15,4 +15,8 @@ echo "Database is ready. Running migrations..."
 alembic upgrade head
 
 echo "Starting API..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+if [ "$ENV" = "dev" ]; then
+  exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+else
+  exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+fi

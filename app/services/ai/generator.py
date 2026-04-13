@@ -22,7 +22,8 @@ def generate_questions(subject: str, topic: str, difficulty: str, num_questions:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            # model="gpt-4o-mini",
+            model="Qwen/Qwen2.5-7B-Instruct:together",
             messages=[
                 {"role": "user", "content": prompt}
             ],
