@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -13,6 +13,7 @@ from app.schemas.models import (
     ExamDetailResponse,
 )
 from app.services.exam.exam_service import ExamService
+from app.services.exam.exam_session_service import ExamSessionService
 from app.common.enums import ExamStatus
 from app.models.exam import Exam
 from app.worker.tasks import generate_exam_task
@@ -105,7 +106,7 @@ def get_my_exams(
             "created_at": exam.created_at,
             "attempted": len(exam.attempts) > 0,
             "score": exam.attempts[-1].score if exam.attempts else None,
-            "questions": exam.exam_questions,
+            "questions": [{"id": str(eq.id)} for eq in exam.exam_questions],
         })
     return result
 
@@ -237,3 +238,30 @@ def get_exam_details(
         )
 
 
+@router.post("/{exam_id}/start", status_code=status.HTTP_200_OK)
+def start_exam(
+    exam_id: UUID,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Start or resume an exam session.
+    Returns session_token, time_remaining_seconds, and saved_answers if resuming.
+    """
+    user_id = UUID(current_user["sub"])
+    service = ExamSessionService(db)
+    try:
+        return service.start_or_resume(
+            exam_id=exam_id,
+            user_id=user_id,
+            request=request,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Start exam error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to start exam session."
+        )

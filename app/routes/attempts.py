@@ -8,30 +8,29 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.auth.dependencies import get_current_user
 from app.services.attempts.attempts_service import AttemptsService
+from app.services.exam.exam_session_service import ExamSessionService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Request / Response schemas
-# ---------------------------------------------------------------------------
-
 class SubmitAttemptRequest(BaseModel):
-    exam_id: UUID
-    answers: dict[str, str]  # {question_id: option_id}
-
-    @field_validator("answers")
-    @classmethod
-    def answers_not_empty(cls, v: dict) -> dict:
-        if not v:
-            raise ValueError("answers must not be empty")
-        return v
+    exam_session_token: str
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
+class SaveAnswerRequest(BaseModel):
+    session_token: str
+    question_id: UUID
+    option_id: UUID
+
+
+class HeartbeatRequest(BaseModel):
+    session_token: str
+
+
+class AbandonRequest(BaseModel):
+    session_token: str
+
 
 @router.post("/submit", status_code=status.HTTP_200_OK)
 def submit_attempt(
@@ -39,37 +38,93 @@ def submit_attempt(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Submit answers for an exam.
-
-    - Validates every answer references a real question in the exam.
-    - Validates every selected option belongs to that question.
-    - Scores the attempt and persists everything in one transaction.
-    - Updates per-question statistics.
-
-    Returns the attempt ID so the frontend can redirect to /results/:id.
-    """
     user_id = UUID(current_user["sub"])
 
-    service = AttemptsService(db)
+    session_service = ExamSessionService(db)
+    session = session_service.validate_and_get_session(
+        session_token=payload.exam_session_token,
+        user_id=user_id,
+    )
+
+    attempts_service = AttemptsService(db)
     try:
-        attempt = service.submit_attempt(
-            exam_id=payload.exam_id,
+        attempt = attempts_service.submit_existing_attempt(
+            attempt_id=session.attempt_id,
             user_id=user_id,
-            answers=payload.answers,
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error submitting attempt: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to submit attempt. Please try again.",
-        )
+        logger.error(f"Submit error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to submit attempt.")
+
+    session_service.finalize_session(payload.exam_session_token)
 
     return {"id": str(attempt.id)}
+
+
+@router.post("/answer", status_code=status.HTTP_200_OK)
+def save_answer(
+    payload: SaveAnswerRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = UUID(current_user["sub"])
+    service = ExamSessionService(db)
+    try:
+        return service.save_answer(
+            session_token=payload.session_token,
+            user_id=user_id,
+            question_id=payload.question_id,
+            option_id=payload.option_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Save answer error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save answer.")
+
+
+@router.post("/heartbeat", status_code=status.HTTP_200_OK)
+def heartbeat(
+    payload: HeartbeatRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = UUID(current_user["sub"])
+    service = ExamSessionService(db)
+    try:
+        return service.heartbeat(
+            session_token=payload.session_token,
+            user_id=user_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Heartbeat error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Heartbeat failed.")
+
+
+@router.post("/abandon", status_code=status.HTTP_200_OK)
+def abandon_attempt(
+    payload: AbandonRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = UUID(current_user["sub"])
+    service = ExamSessionService(db)
+    try:
+        return service.abandon_attempt(
+            session_token=payload.session_token,
+            user_id=user_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Abandon error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to abandon attempt.")
 
 
 @router.get("/{attempt_id}", status_code=status.HTTP_200_OK)
@@ -78,16 +133,10 @@ def get_attempt_results(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Retrieve full results for a submitted attempt.
-
-    Returns score, per-question breakdown, correct answers, and explanations.
-    """
     user_id = UUID(current_user["sub"])
-
     service = AttemptsService(db)
     try:
-        results = service.get_attempt_results(
+        return service.get_attempt_results(
             attempt_id=attempt_id,
             user_id=user_id,
         )
@@ -96,10 +145,5 @@ def get_attempt_results(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error fetching results: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch results.",
-        )
-
-    return results
+        logger.error(f"Results error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch results.")

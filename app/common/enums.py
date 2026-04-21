@@ -18,6 +18,7 @@ class ExamStatus(str, Enum):
 class AttemptStatus(str, Enum):
     in_progress = "in_progress"
     submitted = "submitted"
+    abandoned = "abandoned"
     expired = "expired"
 
 
